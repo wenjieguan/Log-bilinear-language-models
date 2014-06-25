@@ -98,7 +98,6 @@ class LBL:
         RARE = self.vocab['<>']
         delta_c = [np.zeros((self.dim, self.dim) ) for i in range(self.context) ]
         delta_r = np.zeros((len(self.vocab), self.dim) )
-        RC = [np.dot(self.wordEm, self.contextW[i]) for i in range(self.context) ]
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
             for pos in range(self.context, len(sentence) ):
@@ -146,13 +145,14 @@ class LBL:
                 '''
                 probs[w_index] -= 1
                 probs = probs.reshape(len(probs), 1)
-                delta_c[-len(contextEm) : ] += [np.outer(np.sum(probs * self.wordEm, axis = 0), contextEm[i] )
+                temp = np.sum(probs * self.wordEm, axis = 0)
+                delta_c[-len(contextEm) : ] += [np.outer(temp, contextEm[i] )
                                                 for i in range(len(contextEm) ) ]
                 VRC = np.zeros(self.dim)
                 for i in range(len(contextEm) ):
                     VRC += np.dot(contextEm[i], contextW[i].T)
                 delta_r += probs * VRC
-                delta_r[indices] += [np.sum(probs * RC[-len(contextEm) + i], axis = 0) for i in range(len(contextEm) ) ]
+                delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
 
                 # update after visiting batches sequences
                 if count % batches == 0:
@@ -162,7 +162,6 @@ class LBL:
                     self.wordEm -= (delta_r + 1e-4 * self.wordEm) * alpha
                     delta_c = [np.zeros((self.dim, self.dim) ) for i in range(self.context) ]
                     delta_r = np.zeros((len(self.vocab), self.dim) )
-                    RC = [np.dot(self.wordEm, self.contextW[i]) for i in range(self.context) ]
                 elapsed = time.time() - start
                 if elapsed - last_elapsed > 1:
                     print('visited {0} words, with {1:.2f} Ws/s, alpha: {2}.'.format(count, count / elapsed, alpha) )
