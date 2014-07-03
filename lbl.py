@@ -146,8 +146,8 @@ class LBL:
                 probs[w_index] -= 1
                 probs = probs.reshape(len(probs), 1)
                 temp = np.sum(probs * self.wordEm, axis = 0)
-                delta_c[-len(contextEm) : ] += [np.outer(temp, contextEm[i] )
-                                                for i in range(len(contextEm) ) ]
+                for i in range(len(contextEm) ):
+                    delta_c[self.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
                 VRC = np.zeros(self.dim)
                 for i in range(len(contextEm) ):
                     VRC += np.dot(contextEm[i], contextW[i].T)
