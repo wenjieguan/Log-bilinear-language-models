@@ -117,6 +117,8 @@ class LBL:
         delta_r = utils.toNumpyArray(delta_r_raw, np.float64, (len(self.vocab), self.dim) )
         
         '''
+        vocab: dictionary containing each word and its index, it's copied from the parent process
+        self_wordEm, self_contextW, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
         def worker(vocab, self_wordEm, self_contextW,
                    self_delta_c, self_delta_r, dim, 
@@ -165,7 +167,6 @@ class LBL:
                         temp = np.sum(probs * self_wordEm, axis = 0)
                         for i in range(len(contextEm) ):
                             delta_c[self.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
-                        #print len(delta_c) ###################################################
                         VRC = np.zeros(dim)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
