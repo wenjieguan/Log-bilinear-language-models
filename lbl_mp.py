@@ -207,10 +207,6 @@ class LBL:
                 self.contextW[i] -= (delta_c[i] + 1e-5 * self.contextW[i]) * alpha
             self.wordEm -= (delta_r + 1e-4 * self.wordEm) * alpha
 
-            ###############################################
-            print np.sum(np.isnan(self.wordEm)) > 0
-            ##############################################
-
             for i in range(self.context):
                 delta_c[i].fill(0)
             delta_r.fill(0)
