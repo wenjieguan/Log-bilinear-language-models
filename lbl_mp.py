@@ -21,10 +21,11 @@ class LBL:
         '''
         self.vocab = {}
         self.index2word = []
+        self.frequencies = []
         self.total = -1
         self.alpha = alpha
         self.min_alpha = min_alpha
-        self.wordEm = self.contextW = None
+        self.wordEm = self.contextW = self.biases = None
         self.dim = dim
         self.context = context
         self.threshold = threshold
@@ -43,6 +44,7 @@ class LBL:
         f.create_dataset('index2word', data = self.index2word)
         f.create_dataset('wordEm', data = self .wordEm)
         f.create_dataset('contextW', data = self.contextW)
+        f.create_dataset('biases', data = self.biases)
         f.flush()
         f.close()
         print('Saved!')
@@ -50,8 +52,18 @@ class LBL:
 
     def load(self, name = 'lbl.hdf5'):
         f = h5py.File(name, 'r')
-        self.wordEm = f['wordEm'][:]
-        self.contextW = f['contextW'][:]
+        vocab_size, dim = f['wordEm'].shape
+        context = (f['contextW'].shape)[0]
+        self.wordEm_raw = utils.getSharedArray('d', vocab_size * dim )
+        self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float64, (vocab_size, dim) )
+        self.wordEm += f['wordEm'][:] 
+        self.contextW_raw = [utils.getSharedArray('d', dim * dim) for i in range(context) ]
+        self.contextW = [utils.toNumpyArray(self.contextW_raw[i], np.float64, (dim, dim) ) for i in range(context) ]
+        for i in range(context):
+            self.contextW[i] += f['contextW'][i][:]
+        self.biases_raw= utils.getSharedArray('d', vocab_size)
+        self.biases = utils.toNumpyArray(self.biases_raw, np.float64, vocab_size)
+        self.biases += f['biases'][:]
         self.index2word = f['index2word'][:]
         self.vocab = dict(zip(self.index2word, range(len(self.index2word) ) ) )
         
@@ -67,6 +79,9 @@ class LBL:
         self.wordEm_raw = utils.getSharedArray('d', len(self.vocab) * self.dim )
         self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float64, (len(self.vocab), self.dim) )
         self.wordEm += ((np.random.rand(len(self.vocab), self.dim) - 0.5) / self.dim)
+        self.biases_raw= utils.getSharedArray('d', len(self.vocab) )
+        self.biases = utils.toNumpyArray(self.biases_raw, np.float64, len(self.vocab) )
+        self.biases += (np.asarray(self.frequencies, np.float64) / np.sum(self.frequencies) )
             
         
     def prepare_vocabulary(self, sentences):
@@ -84,18 +99,24 @@ class LBL:
         
         self.vocab = {}
         self.index2word = []
+        self.frequencies = []
         index = 0
+        count_oov = 0
         for w, count in vocab.iteritems():
             if count >= self.threshold:
                 self.vocab[w] = index
                 self.index2word.append(w)
+                self.frequencies.append(count)
                 index += 1
+            else:
+                count_oov += count
         self.vocab['<>'] = index
         index += 1
         self.vocab['<s>'] = index
         index += 1
         self.vocab['</s>'] = index
         self.index2word.extend(['<>', '<s>', '</s>'])
+        self.frequencies.extend([count_OOV, sen_no, sen_no] )
         print('\nThe size of vocabulary is: {0}, with threshold being {1}\n'.format(len(self.vocab), self.threshold) )
 
 
@@ -119,13 +140,14 @@ class LBL:
 
         '''
         vocab: dictionary containing each word and its index, it's copied from the parent process
-        self_wordEm, self_contextW, self_delta_c, self_delta_r point to data which is shared among parent and child processes
+        self_wordEm, self_contextW, self_biases, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
-        def worker(vocab, self_wordEm, self_contextW,
+        def worker(vocab, self_wordEm, self_contextW, self_biases
                    self_delta_c, self_delta_r, dim, 
                    context, barrier, lock, queue):
             self_wordEm = utils.toNumpyArray(self_wordEm, np.float64, (len(vocab), dim) )
             self_contextW = [utils.toNumpyArray(self_contextW[i], np.float64, (dim, dim) ) for i in range(context) ]
+            self_biases = utils.toNumpyArray(self_biases, np.float64, len(vocab) )
             self_delta_r = utils.toNumpyArray(self_delta_r, np.float64, (len(vocab), dim) )
             self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float64, (dim, dim) ) for i in range(context) ]
             # delta_c and delta_r are local to a child process, deltas will be stored in them.
@@ -158,7 +180,7 @@ class LBL:
                             contextW.append(ci)
                             r_hat += np.dot(ci, ri)
 
-                        energy = np.exp(np.dot(self_wordEm, r_hat) )
+                        energy = np.exp(np.dot(self_wordEm, r_hat) + self.biases)
                         probs = energy / np.sum(energy)
                         w_index = vocab.get(sentence[pos], RARE)
                         w = self_wordEm[w_index]                        
@@ -188,7 +210,7 @@ class LBL:
 
 
         
-        args = (self.vocab, self.wordEm_raw, self.contextW_raw, 
+        args = (self.vocab, self.wordEm_raw, self.contextW_raw, self.biases_raw
                 delta_c_raw, delta_r_raw, self.dim, self.context, 
                 barrier, lock, queue)
         pool = [Process(target = worker, args = args)  for i in range(workers) ]
@@ -242,7 +264,7 @@ class LBL:
                     ci = self.contextW[i]
                     r_hat += np.dot(ci, ri)
                 w_index = self.vocab.get(sentence[pos], RARE)
-                energy = np.exp(np.dot(self.wordEm, r_hat) )
+                energy = np.exp(np.dot(self.wordEm, r_hat) + self.biases)
                 res = np.log(energy[w_index] / np.sum(energy) )
                 logProbs += res
                 logProbs_no_eos += res
