@@ -17,10 +17,11 @@ class LBL:
         '''
         self.vocab = {}
         self.index2word = []
+        self.frequencies = []
         self.total = -1
         self.alpha = alpha
         self.min_alpha = min_alpha
-        self.wordEm = self.contextW = None
+        self.wordEm = self.contextW = self.biases = None
         self.dim = dim
         self.context = context
         self.threshold = threshold
@@ -39,6 +40,7 @@ class LBL:
         f.create_dataset('index2word', data = self.index2word)
         f.create_dataset('wordEm', data = self .wordEm)
         f.create_dataset('contextW', data = self.contextW)
+        f.create_dataset('biases', data = self.biases)
         f.flush()
         f.close()
         print('Saved!')
@@ -48,6 +50,7 @@ class LBL:
         f = h5py.File(name, 'r')
         self.wordEm = f['wordEm'][:]
         self.contextW = f['contextW'][:]
+        self.biases = f['biases'][:]
         self.index2word = f['index2word'][:]
         self.vocab = dict(zip(self.index2word, range(len(self.index2word) ) ) )
         
@@ -56,6 +59,7 @@ class LBL:
         print('Initialising weights...')
         self.contextW = [(np.random.rand(self.dim, self.dim) - 0.5) / self.dim for i in range(self.context) ]
         self.wordEm = (np.random.rand(len(self.vocab), self.dim) - 0.5) / self.dim
+        self.biases = np.asarray(self.frequencies, np.float64) / np.sum(self.frequencies)
         
 
     def prepare_vocabulary(self, sentences):
@@ -73,18 +77,24 @@ class LBL:
         
         self.vocab = {}
         self.index2word = []
+        self.frequencies = []
         index = 0
+        count_oov = 0
         for w, count in vocab.iteritems():
             if count >= self.threshold:
                 self.vocab[w] = index
                 self.index2word.append(w)
+                self.frequencies.append(count)
                 index += 1
+            else:
+                count_oov += count
         self.vocab['<>'] = index
         index += 1
         self.vocab['<s>'] = index
         index += 1
         self.vocab['</s>'] = index
         self.index2word.extend(['<>', '<s>', '</s>'])
+        self.frequencies.extend([count_OOV, sen_no, sen_no] )
         print('\nThe size of vocabulary is: {0}, with threshold being {1}\n'.format(len(self.vocab), self.threshold) )
 
 
@@ -116,7 +126,7 @@ class LBL:
                     contextEm.append(ri)
                     contextW.append(ci)
                     r_hat += np.dot(ci, ri)
-                energy = np.exp(np.dot(self.wordEm, r_hat) )
+                energy = np.exp(np.dot(self.wordEm, r_hat) + self.biases)
                 probs = energy / np.sum(energy)
                 w_index = self.vocab.get(sentence[pos], RARE)
                 w = self.wordEm[w_index]
@@ -196,7 +206,7 @@ class LBL:
                     ci = self.contextW[i]
                     r_hat += np.dot(ci, ri)
                 w_index = self.vocab.get(sentence[pos], RARE)
-                energy = np.exp(np.dot(self.wordEm, r_hat) )
+                energy = np.exp(np.dot(self.wordEm, r_hat) + self.biases)
                 res = np.log(energy[w_index] / np.sum(energy) )
                 logProbs += res
                 logProbs_no_eos += res
