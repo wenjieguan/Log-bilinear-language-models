@@ -189,7 +189,7 @@ class LBL:
 
                         temp = np.sum(probs * self_wordEm, axis = 0)
                         for i in range(len(contextEm) ):
-                            delta_c[self.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
+                            delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
                         VRC = np.zeros(dim)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
