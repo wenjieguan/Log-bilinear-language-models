@@ -193,7 +193,7 @@ class LBL:
                         VRC = np.zeros(dim)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
-                        delta_r += np.dot(probs, VRC)
+                        delta_r += np.outer(probs, VRC)
                         delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
                 
                 lock.acquire()
