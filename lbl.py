@@ -106,13 +106,14 @@ class LBL:
         start = time.time()
         last_elapsed = 0
         RARE = self.vocab['<>']
+        r_hat = np.zeros(self.dim)
         delta_c = [np.zeros((self.dim, self.dim) ) for i in range(self.context) ]
         delta_r = np.zeros((len(self.vocab), self.dim) )
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
             for pos in range(self.context, len(sentence) ):
                 count += 1
-                r_hat = np.zeros(self.dim)
+                r_hat.fill(0)
                 contextEm = []
                 contextW = []
                 indices = []
@@ -170,8 +171,9 @@ class LBL:
                     for i in range(self.context):
                         self.contextW[i] -= (delta_c[i] + 1e-5 * self.contextW[i]) * alpha
                     self.wordEm -= (delta_r + 1e-4 * self.wordEm) * alpha
-                    delta_c = [np.zeros((self.dim, self.dim) ) for i in range(self.context) ]
-                    delta_r = np.zeros((len(self.vocab), self.dim) )
+                    for i in range(self.context):
+                        delta_c[i].fill(0)
+                    delta_r.fill(0)
                 elapsed = time.time() - start
                 if elapsed - last_elapsed > 1:
                     print('visited {0} words, with {1:.2f} Ws/s, alpha: {2}.'.format(count, count / elapsed, alpha) )
@@ -192,12 +194,13 @@ class LBL:
         # _no_eos means no end of sentence tag </s>
         count_no_eos = count = 0
         logProbs_no_eos = logProbs = 0
+        r_hat = np.zeros(self.dim)
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
             for pos in range(self.context, len(sentence) ):
                 count += 1
                 count_no_eos += 1
-                r_hat = np.zeros(self.dim)
+                r_hat.fill(0)
                 for i, r in enumerate(sentence[pos - self.context : pos]):
                     if r == '<_>':
                         continue
