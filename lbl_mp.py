@@ -158,13 +158,14 @@ class LBL:
 
             # the index of a rare word
             RARE = vocab['<>']
+            r_hat = np.zeros(dim)
             while True:
                 task = queue.get()
                 if task is None:
                     break
                 for sentence in task:
                     for pos in range(context, len(sentence) ):
-                        r_hat = np.zeros(dim)
+                        r_hat.fill(0)
                         contextEm = []
                         contextW = []
                         indices = []
@@ -205,8 +206,9 @@ class LBL:
                 lock.release()
                 barrier.sync()
 
-                delta_c = [np.zeros((dim, dim) ) for i in range(context) ]
-                delta_r = np.zeros((len(vocab), dim) )
+                for i in range(context):
+                    delta_c[i].fill(0)
+                delta_r.fill(0)
 
 
         
@@ -247,6 +249,7 @@ class LBL:
     def perplexity(self, sentences):
         print('Calculating perplexity...')
         RARE = self.vocab['<>']
+        r_hat = np.zeros(self.dim)
         # _no_eos means no end of sentence tag </s>
         count_no_eos = count = 0
         logProbs_no_eos = logProbs = 0
@@ -255,7 +258,7 @@ class LBL:
             for pos in range(self.context, len(sentence) ):
                 count += 1
                 count_no_eos += 1
-                r_hat = np.zeros(self.dim)
+                r_hat.fill(0)
                 for i, r in enumerate(sentence[pos - self.context : pos]):
                     if r == '<_>':
                         continue
