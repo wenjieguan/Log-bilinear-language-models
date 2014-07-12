@@ -186,15 +186,14 @@ class LBL:
                         w_index = vocab.get(sentence[pos], RARE)
                         w = self_wordEm[w_index]                        
                         probs[w_index] -= 1
-                        probs = probs.reshape(len(probs), 1)
 
-                        temp = np.sum(probs * self_wordEm, axis = 0)
+                        temp = np.dot(probs, self_wordEm)
                         for i in range(len(contextEm) ):
                             delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
                         VRC = np.zeros(dim)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
-                        delta_r += probs * VRC
+                        delta_r += np.dot(probs, VRC)
                         delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
                 
                 lock.acquire()
