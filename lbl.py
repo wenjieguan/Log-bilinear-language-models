@@ -155,14 +155,13 @@ class LBL:
                 *
                 '''
                 probs[w_index] -= 1
-                probs = probs.reshape(len(probs), 1)
-                temp = np.sum(probs * self.wordEm, axis = 0)
+                temp = np.dot(probs, self.wordEm)
                 for i in range(len(contextEm) ):
                     delta_c[self.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
                 VRC = np.zeros(self.dim)
                 for i in range(len(contextEm) ):
                     VRC += np.dot(contextEm[i], contextW[i].T)
-                delta_r += probs * VRC
+                delta_r += np.outer(probs, VRC)
                 delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
 
                 # update after visiting batches sequences
