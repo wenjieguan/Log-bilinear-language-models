@@ -142,38 +142,37 @@ class LBL:
         vocab: dictionary containing each word and its index, it's copied from the parent process
         self_wordEm, self_contextW, self_biases, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
-        def worker(vocab, self_wordEm, self_contextW, self_biases
-                   self_delta_c, self_delta_r, dim, 
-                   context, barrier, lock, queue):
-            self_wordEm = utils.toNumpyArray(self_wordEm, np.float64, (len(vocab), dim) )
-            self_contextW = [utils.toNumpyArray(self_contextW[i], np.float64, (dim, dim) ) for i in range(context) ]
-            self_biases = utils.toNumpyArray(self_biases, np.float64, len(vocab) )
-            self_delta_r = utils.toNumpyArray(self_delta_r, np.float64, (len(vocab), dim) )
-            self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float64, (dim, dim) ) for i in range(context) ]
+        def worker(model, self_delta_c, self_delta_r, barrier, lock, queue):
+            self_wordEm = utils.toNumpyArray(model.wordEm_raw, np.float64, (len(model.vocab), model.dim) )
+            self_contextW = [utils.toNumpyArray(model.contextW_raw[i], np.float64, (model.dim, model.dim) ) for i in range(model.context) ]
+            self_biases = utils.toNumpyArray(model.biases_raw, np.float64, len(model.vocab) )
+            self_delta_r = utils.toNumpyArray(self_delta_r, np.float64, (len(model.vocab), model.dim) )
+            self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float64, (model.dim, model.dim) ) for i in range(model.context) ]
             # delta_c and delta_r are local to a child process, deltas will be stored in them.
             # after finishing its task, a child process will add them to their counterparts in 
             # the parent process via self_delta_r and self_delta_c
-            delta_c = [np.zeros((dim, dim) ) for i in range(context) ]
-            delta_r = np.zeros((len(vocab), dim) )
+            delta_c = [np.zeros((model.dim, model.dim) ) for i in range(model.context) ]
+            delta_r = np.zeros((len(model.vocab), model.dim) )
 
             # the index of a rare word
             RARE = vocab['<>']
-            r_hat = np.zeros(dim)
+            r_hat = np.zeros(model.dim)
+            VRC = np.zeros(model.dim)
             while True:
                 task = queue.get()
                 if task is None:
                     break
                 for sentence in task:
-                    for pos in range(context, len(sentence) ):
+                    for pos in range(model.context, len(sentence) ):
                         r_hat.fill(0)
                         contextEm = []
                         contextW = []
                         indices = []
 
-                        for i, r in enumerate(sentence[pos - context : pos]):
+                        for i, r in enumerate(sentence[pos - model.context : pos]):
                             if r == '<_>':
                                 continue
-                            index = vocab.get(r, RARE)
+                            index = model.vocab.get(r, RARE)
                             indices.append(index)
                             ri = self_wordEm[index]
                             ci = self_contextW[i]
@@ -181,23 +180,23 @@ class LBL:
                             contextW.append(ci)
                             r_hat += np.dot(ci, ri)
 
-                        energy = np.exp(np.dot(self_wordEm, r_hat) + self.biases)
+                        energy = np.exp(np.dot(self_wordEm, r_hat) + self_biases)
                         probs = energy / np.sum(energy)
-                        w_index = vocab.get(sentence[pos], RARE)
+                        w_index = model.vocab.get(sentence[pos], RARE)
                         w = self_wordEm[w_index]                        
                         probs[w_index] -= 1
 
                         temp = np.dot(probs, self_wordEm)
                         for i in range(len(contextEm) ):
                             delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
-                        VRC = np.zeros(dim)
+                        VRC.fill(0)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
                         delta_r += np.outer(probs, VRC)
                         delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
                 
                 lock.acquire()
-                for i in range(context):
+                for i in range(model.context):
                     self_delta_c[i] += delta_c[i]
                 lock.release()
                 lock.acquire()
@@ -205,15 +204,13 @@ class LBL:
                 lock.release()
                 barrier.sync()
 
-                for i in range(context):
+                for i in range(model.context):
                     delta_c[i].fill(0)
                 delta_r.fill(0)
 
 
         
-        args = (self.vocab, self.wordEm_raw, self.contextW_raw, self.biases_raw
-                delta_c_raw, delta_r_raw, self.dim, self.context, 
-                barrier, lock, queue)
+        args = (self, delta_c_raw, delta_r_raw, barrier, lock, queue)
         pool = [Process(target = worker, args = args)  for i in range(workers) ]
         for p in pool:
             p.daemon = True
