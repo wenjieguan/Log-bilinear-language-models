@@ -116,7 +116,7 @@ class LBL:
         index += 1
         self.vocab['</s>'] = index
         self.index2word.extend(['<>', '<s>', '</s>'])
-        self.frequencies.extend([count_OOV, sen_no, sen_no] )
+        self.frequencies.extend([count_oov, sen_no, sen_no] )
         print('\nThe size of vocabulary is: {0}, with threshold being {1}\n'.format(len(self.vocab), self.threshold) )
 
 
@@ -155,7 +155,7 @@ class LBL:
             delta_r = np.zeros((len(model.vocab), model.dim) )
 
             # the index of a rare word
-            RARE = vocab['<>']
+            RARE = model.vocab['<>']
             r_hat = np.zeros(model.dim)
             VRC = np.zeros(model.dim)
             while True:
@@ -183,12 +183,11 @@ class LBL:
                         energy = np.exp(np.dot(self_wordEm, r_hat) + self_biases)
                         probs = energy / np.sum(energy)
                         w_index = model.vocab.get(sentence[pos], RARE)
-                        w = self_wordEm[w_index]                        
                         probs[w_index] -= 1
 
                         temp = np.dot(probs, self_wordEm)
                         for i in range(len(contextEm) ):
-                            delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
+                            delta_c[model.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
                         VRC.fill(0)
                         for i in range(len(contextEm) ):
                             VRC += np.dot(contextEm[i], contextW[i].T)
