@@ -54,15 +54,15 @@ class LBL:
         f = h5py.File(name, 'r')
         vocab_size, dim = f['wordEm'].shape
         context = (f['contextW'].shape)[0]
-        self.wordEm_raw = utils.getSharedArray('d', vocab_size * dim )
-        self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float64, (vocab_size, dim) )
+        self.wordEm_raw = utils.getSharedArray('f', vocab_size * dim )
+        self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float32, (vocab_size, dim) )
         self.wordEm += f['wordEm'][:] 
-        self.contextW_raw = [utils.getSharedArray('d', dim * dim) for i in range(context) ]
-        self.contextW = [utils.toNumpyArray(self.contextW_raw[i], np.float64, (dim, dim) ) for i in range(context) ]
+        self.contextW_raw = [utils.getSharedArray('f', dim * dim) for i in range(context) ]
+        self.contextW = [utils.toNumpyArray(self.contextW_raw[i], np.float32, (dim, dim) ) for i in range(context) ]
         for i in range(context):
             self.contextW[i] += f['contextW'][i][:]
-        self.biases_raw= utils.getSharedArray('d', vocab_size)
-        self.biases = utils.toNumpyArray(self.biases_raw, np.float64, vocab_size)
+        self.biases_raw= utils.getSharedArray('f', vocab_size)
+        self.biases = utils.toNumpyArray(self.biases_raw, np.float32, vocab_size)
         self.biases += f['biases'][:]
         self.index2word = f['index2word'][:]
         self.vocab = dict(zip(self.index2word, range(len(self.index2word) ) ) )
@@ -71,17 +71,17 @@ class LBL:
     def initialise(self):
         print('Initialising weights...')
         # contextW_raw contains raw arrays which will be shared among processes
-        self.contextW_raw = [utils.getSharedArray('d', self.dim * self.dim) for i in range(self.context) ]
+        self.contextW_raw = [utils.getSharedArray('f', self.dim * self.dim) for i in range(self.context) ]
         # contextW contains numpy wrappers which can be easily used by the parent process
-        self.contextW = [utils.toNumpyArray(self.contextW_raw[i], np.float64, (self.dim, self.dim) ) for i in range(self.context) ]
+        self.contextW = [utils.toNumpyArray(self.contextW_raw[i], np.float32, (self.dim, self.dim) ) for i in range(self.context) ]
         for i in range(self.context):
-            self.contextW[i] += ((np.random.rand(self.dim, self.dim) - 0.5) / self.dim)
-        self.wordEm_raw = utils.getSharedArray('d', len(self.vocab) * self.dim )
-        self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float64, (len(self.vocab), self.dim) )
-        self.wordEm += ((np.random.rand(len(self.vocab), self.dim) - 0.5) / self.dim)
-        self.biases_raw= utils.getSharedArray('d', len(self.vocab) )
-        self.biases = utils.toNumpyArray(self.biases_raw, np.float64, len(self.vocab) )
-        self.biases += (np.asarray(self.frequencies, np.float64) / np.sum(self.frequencies) )
+            self.contextW[i] += ((np.random.rand(self.dim, self.dim).astype(np.float32) - 0.5) / self.dim)
+        self.wordEm_raw = utils.getSharedArray('f', len(self.vocab) * self.dim )
+        self.wordEm = utils.toNumpyArray(self.wordEm_raw, np.float32, (len(self.vocab), self.dim) )
+        self.wordEm += ((np.random.rand(len(self.vocab), self.dim).astype(np.float32) - 0.5) / self.dim)
+        self.biases_raw= utils.getSharedArray('f', len(self.vocab) )
+        self.biases = utils.toNumpyArray(self.biases_raw, np.float32, len(self.vocab) )
+        self.biases += (np.asarray(self.frequencies, np.float32) / np.sum(self.frequencies) )
             
         
     def prepare_vocabulary(self, sentences):
@@ -131,10 +131,10 @@ class LBL:
         queue = Queue(workers)
         # delta_c_raw contains context weights for each position, they are shared, so each child process can 
         # add their delta on them. delta_c is a numpy wrapper which makes the parent process handle it easily
-        delta_c_raw = [utils.getSharedArray('d', self.dim * self.dim) for i in range(self.context) ]
-        delta_c = [utils.toNumpyArray(delta_c_raw[i], np.float64, (self.dim, self.dim) ) for i in range(self.context) ]
-        delta_r_raw = utils.getSharedArray('d', len(self.vocab) * self.dim) 
-        delta_r = utils.toNumpyArray(delta_r_raw, np.float64, (len(self.vocab), self.dim) )
+        delta_c_raw = [utils.getSharedArray('f', self.dim * self.dim) for i in range(self.context) ]
+        delta_c = [utils.toNumpyArray(delta_c_raw[i], np.float32, (self.dim, self.dim) ) for i in range(self.context) ]
+        delta_r_raw = utils.getSharedArray('f', len(self.vocab) * self.dim) 
+        delta_r = utils.toNumpyArray(delta_r_raw, np.float32, (len(self.vocab), self.dim) )
         
 
 
@@ -143,21 +143,21 @@ class LBL:
         self_wordEm, self_contextW, self_biases, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
         def worker(model, self_delta_c, self_delta_r, barrier, lock, queue):
-            self_wordEm = utils.toNumpyArray(model.wordEm_raw, np.float64, (len(model.vocab), model.dim) )
-            self_contextW = [utils.toNumpyArray(model.contextW_raw[i], np.float64, (model.dim, model.dim) ) for i in range(model.context) ]
-            self_biases = utils.toNumpyArray(model.biases_raw, np.float64, len(model.vocab) )
-            self_delta_r = utils.toNumpyArray(self_delta_r, np.float64, (len(model.vocab), model.dim) )
-            self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float64, (model.dim, model.dim) ) for i in range(model.context) ]
+            self_wordEm = utils.toNumpyArray(model.wordEm_raw, np.float32, (len(model.vocab), model.dim) )
+            self_contextW = [utils.toNumpyArray(model.contextW_raw[i], np.float32, (model.dim, model.dim) ) for i in range(model.context) ]
+            self_biases = utils.toNumpyArray(model.biases_raw, np.float32, len(model.vocab) )
+            self_delta_r = utils.toNumpyArray(self_delta_r, np.float32, (len(model.vocab), model.dim) )
+            self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float32, (model.dim, model.dim) ) for i in range(model.context) ]
             # delta_c and delta_r are local to a child process, deltas will be stored in them.
             # after finishing its task, a child process will add them to their counterparts in 
             # the parent process via self_delta_r and self_delta_c
-            delta_c = [np.zeros((model.dim, model.dim) ) for i in range(model.context) ]
-            delta_r = np.zeros((len(model.vocab), model.dim) )
+            delta_c = [np.zeros((model.dim, model.dim), np.float32) for i in range(model.context) ]
+            delta_r = np.zeros((len(model.vocab), model.dim), np.float32)
 
             # the index of a rare word
             RARE = model.vocab['<>']
-            r_hat = np.zeros(model.dim)
-            VRC = np.zeros(model.dim)
+            r_hat = np.zeros(model.dim, np.float32)
+            VRC = np.zeros(model.dim, np.float32)
             while True:
                 task = queue.get()
                 if task is None:
@@ -244,7 +244,7 @@ class LBL:
     def perplexity(self, sentences):
         print('Calculating perplexity...')
         RARE = self.vocab['<>']
-        r_hat = np.zeros(self.dim)
+        r_hat = np.zeros(self.dim, np.float32)
         # _no_eos means no end of sentence tag </s>
         count_no_eos = count = 0
         logProbs_no_eos = logProbs = 0
