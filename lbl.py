@@ -162,7 +162,8 @@ class LBL:
                 for i in range(len(contextEm) ):
                     VRC += np.dot(contextEm[i], contextW[i].T)
                 delta_r += np.outer(probs, VRC)
-                delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
+                for i in range(len(contextEm) ):
+                    delta_r[indices[i] ] += np.dot(temp, contextW[i])
 
                 # update after visiting batches sequences
                 if count % batches == 0:
