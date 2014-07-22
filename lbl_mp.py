@@ -3,6 +3,8 @@ import time
 import h5py
 import utils
 from multiprocessing import Process, Lock, Queue
+from lbl_mpc import train_sentence_fast
+
 
 class LBL:
     def __init__(self, sentences = None, alpha = 0.001, min_alpha = 0.001, dim = 100, context = 5, threshold = 3, batches = 1000, workers = 4):
@@ -144,9 +146,6 @@ class LBL:
         self_wordEm, self_contextW, self_biases, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
         def worker(model, self_delta_c, self_delta_r, barrier, lock1, lock2, queue):
-            self_wordEm = utils.toNumpyArray(model.wordEm_raw, np.float32, (len(model.vocab), model.dim) )
-            self_contextW = [utils.toNumpyArray(model.contextW_raw[i], np.float32, (model.dim, model.dim) ) for i in range(model.context) ]
-            self_biases = utils.toNumpyArray(model.biases_raw, np.float32, len(model.vocab) )
             self_delta_r = utils.toNumpyArray(self_delta_r, np.float32, (len(model.vocab), model.dim) )
             self_delta_c = [utils.toNumpyArray(self_delta_c[i], np.float32, (model.dim, model.dim) ) for i in range(model.context) ]
             # delta_c and delta_r are local to a child process, deltas will be stored in them.
@@ -157,44 +156,18 @@ class LBL:
 
             # the index of a rare word
             RARE = model.vocab['<>']
-            r_hat = np.zeros(model.dim, np.float32)
-            VRC = np.zeros(model.dim, np.float32)
+            # work_d and work_v are reused in train_sentence_fast
+            work_d = np.empty(model.dim, np.float32)
+            work_v = np.empty(len(model.vocab), np.float32)
             while True:
                 task = queue.get()
                 if task is None:
                     break
                 for sentence in task:
-                    for pos in range(model.context, len(sentence) ):
-                        r_hat.fill(0)
-                        contextEm = []
-                        contextW = []
-                        indices = []
-
-                        for i, r in enumerate(sentence[pos - model.context : pos]):
-                            if r == '<_>':
-                                continue
-                            index = model.vocab.get(r, RARE)
-                            indices.append(index)
-                            ri = self_wordEm[index]
-                            ci = self_contextW[i]
-                            contextEm.append(ri)
-                            contextW.append(ci)
-                            r_hat += np.dot(ci, ri)
-
-                        energy = np.exp(np.dot(self_wordEm, r_hat) + self_biases)
-                        probs = energy / np.sum(energy)
-                        w_index = model.vocab.get(sentence[pos], RARE)
-                        probs[w_index] -= 1
-
-                        temp = np.dot(probs, self_wordEm)
-                        for i in range(len(contextEm) ):
-                            delta_c[model.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
-                        VRC.fill(0)
-                        for i in range(len(contextEm) ):
-                            VRC += np.dot(contextEm[i], contextW[i].T)
-                        delta_r += np.outer(probs, VRC)
-                        for i in range(len(contextEm) ):
-                            delta_r[indices[i] ] += np.dot(temp, contextW[i])
+                    # null padding has a special index of -1
+                    indices = map(lambda w: -1 if w == '<_>' else model.vocab.get(w, RARE), sentence)
+                    indices = np.asarray(indices, np.int32)
+                    train_sentence_fast(model, indices, delta_c, delta_r, work_d, work_v)
                 
                 lock1.acquire()
                 for i in range(model.context):
