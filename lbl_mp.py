@@ -6,6 +6,56 @@ from multiprocessing import Process, Lock, Queue
 from lbl_mpc import train_sentence_fast
 
 
+# the original slow version
+def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
+    for pos in range(model.context, len(sentence) ):
+        r_hat.fill(0)
+        contextEm = []
+        contextW = []
+        indices = []
+    
+        for i, r in enumerate(sentence[pos - model.context : pos]):
+            if r == '<_>':
+                continue
+            index = model.vocab.get(r, RARE)
+            indices.append(index)
+            ri = model.wordEm[index]
+            ci = model.contextW[i]
+            contextEm.append(ri)
+            contextW.append(ci)
+            r_hat += np.dot(ci, ri)
+    
+        energy = np.exp(np.dot(model.wordEm, r_hat) + model.biases)
+        probs = energy / np.sum(energy)
+        w_index = model.vocab.get(sentence[pos], RARE)
+        probs[w_index] -= 1
+    
+        temp = np.dot(probs, model.wordEm)
+        for i in range(len(contextEm) ):
+            delta_c[model.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
+        VRC.fill(0)
+        for i in range(len(contextEm) ):
+            VRC += np.dot(contextEm[i], contextW[i].T)
+        delta_r += np.outer(probs, VRC)
+        for i in range(len(contextEm) ):
+            delta_r[indices[i] ] += np.dot(temp, contextW[i])
+
+
+# by default, the fast version is used
+train_sentence = train_sentence_fast
+
+
+def switch():
+    global train_sentence
+    if train_sentence == train_sentence_fast:
+        train_sentence = train_sentence_slow
+        print('Now slow version is used.')
+    else:
+        train_sentence = train_sentence_fast
+        print('Now fast version is used.')
+
+
+
 class LBL:
     def __init__(self, sentences = None, alpha = 0.001, min_alpha = 0.001, dim = 100, context = 5, threshold = 3, batches = 1000, workers = 4):
         '''
@@ -167,7 +217,7 @@ class LBL:
                     # null padding has a special index of -1
                     indices = map(lambda w: -1 if w == '<_>' else model.vocab.get(w, RARE), sentence)
                     indices = np.asarray(indices, np.int32)
-                    train_sentence_fast(model, indices, delta_c, delta_r, work_d, work_v)
+                    train_sentence(model, indices, delta_c, delta_r, work_d, work_v)
                 
                 lock1.acquire()
                 for i in range(model.context):
