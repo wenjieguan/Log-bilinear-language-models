@@ -5,7 +5,7 @@ import utils
 from multiprocessing import Process, Lock, Queue
 
 class LBL:
-    def __init__(self, sentences = None, alpha = 0.025, min_alpha = 0.0237, dim = 100, context = 5, threshold = 3, batches = 1000, workers = 4):
+    def __init__(self, sentences = None, alpha = 0.001, min_alpha = 0.001, dim = 100, context = 5, threshold = 3, batches = 1000, workers = 4):
         '''
         sentences should be a generator
         vocab, for each word, stores its corresponding namedtuple word
@@ -120,7 +120,7 @@ class LBL:
         print('\nThe size of vocabulary is: {0}, with threshold being {1}\n'.format(len(self.vocab), self.threshold) )
 
 
-    def train(self, sentences, alpha = 0.025, min_alpha = 0.0235, batches = 1000, workers = 4):
+    def train(self, sentences, alpha = 0.001, min_alpha = 0.001, batches = 1000, workers = 4):
         print('Start training...')
         self.alpha = alpha
         self.min_alpha = min_alpha
