@@ -6,7 +6,7 @@ from multiprocessing import Process, Lock, Queue
 from lbl_mpc import train_sentence_fast
 
 
-# the original slow version
+# the original slow version; sentence is a list of words' indices
 def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
     for pos in range(model.context, len(sentence) ):
         r_hat.fill(0)
@@ -14,12 +14,11 @@ def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
         contextW = []
         indices = []
     
-        for i, r in enumerate(sentence[pos - model.context : pos]):
-            if r == '<_>':
+        for i, ind in enumerate(sentence[pos - model.context : pos]):
+            if ind == -1:
                 continue
-            index = model.vocab.get(r, RARE)
-            indices.append(index)
-            ri = model.wordEm[index]
+            indices.append(ind)
+            ri = model.wordEm[ind]
             ci = model.contextW[i]
             contextEm.append(ri)
             contextW.append(ci)
@@ -27,7 +26,7 @@ def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
     
         energy = np.exp(np.dot(model.wordEm, r_hat) + model.biases)
         probs = energy / np.sum(energy)
-        w_index = model.vocab.get(sentence[pos], RARE)
+        w_index = sentence[pos]
         probs[w_index] -= 1
     
         temp = np.dot(probs, model.wordEm)
