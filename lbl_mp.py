@@ -127,7 +127,8 @@ class LBL:
         count = 0
         # barrier is used to sync parent and all workers
         barrier = utils.getBarrier(workers + 1)
-        lock = Lock()
+        lock1 = Lock()
+        lock2 = Lock()
         queue = Queue(workers)
         # delta_c_raw contains context weights for each position, they are shared, so each child process can 
         # add their delta on them. delta_c is a numpy wrapper which makes the parent process handle it easily
@@ -142,7 +143,7 @@ class LBL:
         vocab: dictionary containing each word and its index, it's copied from the parent process
         self_wordEm, self_contextW, self_biases, self_delta_c, self_delta_r point to data which is shared among parent and child processes
         '''
-        def worker(model, self_delta_c, self_delta_r, barrier, lock, queue):
+        def worker(model, self_delta_c, self_delta_r, barrier, lock1, lock2, queue):
             self_wordEm = utils.toNumpyArray(model.wordEm_raw, np.float32, (len(model.vocab), model.dim) )
             self_contextW = [utils.toNumpyArray(model.contextW_raw[i], np.float32, (model.dim, model.dim) ) for i in range(model.context) ]
             self_biases = utils.toNumpyArray(model.biases_raw, np.float32, len(model.vocab) )
@@ -195,13 +196,13 @@ class LBL:
                         for i in range(len(contextEm) ):
                             delta_r[indices[i] ] += np.dot(temp, contextW[i])
                 
-                lock.acquire()
+                lock1.acquire()
                 for i in range(model.context):
                     self_delta_c[i] += delta_c[i]
-                lock.release()
-                lock.acquire()
+                lock1.release()
+                lock2.acquire()
                 self_delta_r += delta_r
-                lock.release()
+                lock2.release()
                 barrier.sync()
 
                 for i in range(model.context):
@@ -210,7 +211,7 @@ class LBL:
 
 
         
-        args = (self, delta_c_raw, delta_r_raw, barrier, lock, queue)
+        args = (self, delta_c_raw, delta_r_raw, barrier, lock1, lock2, queue)
         pool = [Process(target = worker, args = args)  for i in range(workers) ]
         for p in pool:
             p.daemon = True
