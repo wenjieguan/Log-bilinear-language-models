@@ -6,10 +6,10 @@ from multiprocessing import Process, Lock, Queue
 from lbl_mpc import train_sentence_fast
 
 
-# the original slow version; sentence is a list of words' indices
-def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
+# the original slow version; sentence is a list of words' indices; work_v is not used here
+def train_sentence_slow(model, sentence, delta_c, delta_r, work_d, work_v = None):
     for pos in range(model.context, len(sentence) ):
-        r_hat.fill(0)
+        work_d.fill(0)
         contextEm = []
         contextW = []
         indices = []
@@ -22,9 +22,9 @@ def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
             ci = model.contextW[i]
             contextEm.append(ri)
             contextW.append(ci)
-            r_hat += np.dot(ci, ri)
+            work_d += np.dot(ci, ri)
     
-        energy = np.exp(np.dot(model.wordEm, r_hat) + model.biases)
+        energy = np.exp(np.dot(model.wordEm, work_d) + model.biases)
         probs = energy / np.sum(energy)
         w_index = sentence[pos]
         probs[w_index] -= 1
@@ -32,10 +32,10 @@ def train_sentence_slow(model, sentence, delta_c, delta_r, r_hat, VRC):
         temp = np.dot(probs, model.wordEm)
         for i in range(len(contextEm) ):
             delta_c[model.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
-        VRC.fill(0)
+        work_d.fill(0)
         for i in range(len(contextEm) ):
-            VRC += np.dot(contextEm[i], contextW[i].T)
-        delta_r += np.outer(probs, VRC)
+            work_d += np.dot(contextEm[i], contextW[i].T)
+        delta_r += np.outer(probs, work_d)
         for i in range(len(contextEm) ):
             delta_r[indices[i] ] += np.dot(temp, contextW[i])
 
