@@ -274,18 +274,18 @@ class LBL:
         logProbs_no_eos = logProbs = 0
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
+            sentence = map(lambda w: -1 if w == '<_>' else self.vocab.get(w, RARE), sentence)
             for pos in range(self.context, len(sentence) ):
                 count += 1
                 count_no_eos += 1
                 r_hat.fill(0)
-                for i, r in enumerate(sentence[pos - self.context : pos]):
-                    if r == '<_>':
+                for i, ind in enumerate(sentence[pos - self.context : pos]):
+                    if ind == -1:
                         continue
-                    index = self.vocab.get(r, RARE)
-                    ri = self.wordEm[index]
+                    ri = self.wordEm[ind]
                     ci = self.contextW[i]
                     r_hat += np.dot(ci, ri)
-                w_index = self.vocab.get(sentence[pos], RARE)
+                w_index = sentence[pos]
                 energy = np.exp(np.dot(self.wordEm, r_hat) + self.biases)
                 res = np.log(energy[w_index] / np.sum(energy) )
                 logProbs += res
