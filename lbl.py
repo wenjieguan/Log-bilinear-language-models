@@ -3,7 +3,7 @@ import time
 import h5py
 
 class LBL:
-    def __init__(self, sentences = None, alpha = 0.025, min_alpha = 0.0237, dim = 100, context = 5, threshold = 3, batches = 1000):
+    def __init__(self, sentences = None, alpha = 0.001, min_alpha = 0.001, dim = 100, context = 5, threshold = 3, batches = 1000):
         '''
         vocab, for each word, stores its corresponding namedtuple word
         index2word records the index for each word
@@ -57,9 +57,9 @@ class LBL:
 
     def initialise(self):
         print('Initialising weights...')
-        self.contextW = [(np.random.rand(self.dim, self.dim) - 0.5) / self.dim for i in range(self.context) ]
-        self.wordEm = (np.random.rand(len(self.vocab), self.dim) - 0.5) / self.dim
-        self.biases = np.asarray(self.frequencies, np.float64) / np.sum(self.frequencies)
+        self.contextW = [(np.random.rand(self.dim, self.dim).astypes(np.float32) - 0.5) / self.dim for i in range(self.context) ]
+        self.wordEm = (np.random.rand(len(self.vocab), self.dim).astypes(np.float32) - 0.5) / self.dim
+        self.biases = np.asarray(self.frequencies, np.float32) / np.sum(self.frequencies)
         
 
     def prepare_vocabulary(self, sentences):
@@ -98,7 +98,7 @@ class LBL:
         print('\nThe size of vocabulary is: {0}, with threshold being {1}\n'.format(len(self.vocab), self.threshold) )
 
 
-    def train(self, sentences, alpha = 0.025, min_alpha = 0.0235, batches = 1000):
+    def train(self, sentences, alpha = 0.001, min_alpha = 0.001, batches = 1000):
         print('Start training...')
         self.alpha = alpha
         self.min_alpha = min_alpha
@@ -106,9 +106,9 @@ class LBL:
         start = time.time()
         last_elapsed = 0
         RARE = self.vocab['<>']
-        r_hat = np.zeros(self.dim)
-        delta_c = [np.zeros((self.dim, self.dim) ) for i in range(self.context) ]
-        delta_r = np.zeros((len(self.vocab), self.dim) )
+        r_hat = np.zeros(self.dim, np.float32)
+        delta_c = [np.zeros((self.dim, self.dim), np.float32) for i in range(self.context) ]
+        delta_r = np.zeros((len(self.vocab), self.dim), np.float32)
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
             for pos in range(self.context, len(sentence) ):
@@ -158,7 +158,7 @@ class LBL:
                 temp = np.dot(probs, self.wordEm)
                 for i in range(len(contextEm) ):
                     delta_c[self.context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
-                VRC = np.zeros(self.dim)
+                VRC = np.zeros(self.dim, np.float32)
                 for i in range(len(contextEm) ):
                     VRC += np.dot(contextEm[i], contextW[i].T)
                 delta_r += np.outer(probs, VRC)
@@ -194,7 +194,7 @@ class LBL:
         # _no_eos means no end of sentence tag </s>
         count_no_eos = count = 0
         logProbs_no_eos = logProbs = 0
-        r_hat = np.zeros(self.dim)
+        r_hat = np.zeros(self.dim, np.float32)
         for sentence in sentences:
             sentence = self.l_pad + sentence + self.r_pad
             for pos in range(self.context, len(sentence) ):
