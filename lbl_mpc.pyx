@@ -39,41 +39,42 @@ cdef inline void update(const int start, const int end, INT32_t *sentence,
     cdef SINGLE_t sum = <SINGLE_t>0.0
     cdef SINGLE_t alpha  
     
-    #energy = np.exp(np.dot(self_wordEm, r_hat) + self_biases)
+    # energy = np.exp(np.dot(self_wordEm, r_hat) + self_biases)
     for i in range(vocab_size):
         work_v[i] = <SINGLE_t>exp(<SINGLE_t>sdot(&dim, &wordEm[i * dim], &ONE, work_d, &ONE) + biases[i] )
         sum += work_v[i]
     
-    #probs = energy / np.sum(energy)
+    # probs = energy / np.sum(energy)
     alpha = ONEF / sum
     sscal(&vocab_size, &alpha, work_v, &ONE)
     
-    #probs[w_index] -= 1
+    # probs[w_index] -= 1
     work_v[sentence[end] ] -= ONEF
     
-    #VRC = np.zeros(dim, np.float32)
-    #for i in range(len(contextEm) ):
-    #    VRC += np.dot(contextEm[i], contextW[i].T)
+    # VRC = np.zeros(dim, np.float32)
+    # for i in range(len(contextEm) ):
+    #     VRC += np.dot(contextEm[i], contextW[i].T)
     memset(work_d, 0, dim * cython.sizeof(SINGLE_t) )
     for i in range(start, end):
         for j in range(dim):
             work_d[j] += <SINGLE_t>sdot(&dim, &wordEm[sentence[i] * dim], &ONE, &contextW[context - end + i][j * dim], &ONE)
     
-    #delta_r += np.outer(probs, VRC)
+    # delta_r += np.outer(probs, VRC)
     for i in range(vocab_size):
         saxpy(&dim, &work_v[i], work_d, &ONE, &delta_r[i * dim], &ONE)
     
-    #temp = np.dot(probs, self_wordEm)
+    # temp = np.dot(probs, self_wordEm)
     for i in range(dim):
         work_d[i] = <SINGLE_t>sdot(&vocab_size, work_v, &ONE, &wordEm[i], &dim)
     
-    #delta_r[indices] += [np.dot(temp, contextW[i]) for i in range(len(contextEm) ) ]
+    # for i in range(len(contextEm) ):
+    #     delta_r[sentence[i] ] += np.dot(temp, contextW[i])
     for i in range(start, end):
         for j in range(dim):
             delta_r[sentence[i] * dim + j] += <SINGLE_t>sdot(&dim, work_d, &ONE, &contextW[context - end + i][j], &dim)
     
-    #for i in range(len(contextEm) ):
-    #    delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
+    # for i in range(len(contextEm) ):
+    #     delta_c[context - len(contextEm) + i] += np.outer(temp, contextEm[i] )
     for i in range(start, end):
         for j in range(dim):
             saxpy(&dim, &work_d[j], &wordEm[sentence[i] * dim], &ONE, &delta_c[context - end + i][j * dim], &ONE)
